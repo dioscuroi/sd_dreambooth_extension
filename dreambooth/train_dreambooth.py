@@ -146,7 +146,12 @@ def stop_profiler(profiler):
             pass
 
 
-def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
+def main(
+    class_gen_method: str = "Native Diffusers",
+    callback_at_generating_class_images = None,
+    callback_at_epoch_begins = None,
+    callback_at_saving_weights = None,    
+) -> TrainResult:
     """
     @param class_gen_method: Image Generation Library.
     @return: TrainResult
@@ -166,7 +171,6 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
         logging_dir=logging_dir,
     )
     def inner_loop(train_batch_size: int, gradient_accumulation_steps: int, profiler: profile):
-
         text_encoder = None
         global last_samples
         global last_prompts
@@ -227,6 +231,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             print(msg)
             status.textinfo = msg
             stop_text_percentage = 0
+
+        callback_at_generating_class_images()
+
         count, instance_prompts, class_prompts = generate_classifiers(
             args, class_gen_method=class_gen_method, accelerator=accelerator, ui=False
         )
@@ -256,6 +263,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             return new_vae
 
         disable_safe_unpickle()
+
         # Load the tokenizer
         tokenizer = AutoTokenizer.from_pretrained(
             os.path.join(args.pretrained_model_name_or_path, "tokenizer"),
@@ -870,6 +878,9 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
 
                             elif save_lora:
                                 pbar.set_description("Saving Lora Weights...")
+
+                                callback_at_saving_weights()
+                                
                                 # setup directory
                                 loras_dir = os.path.join(args.model_dir, "loras")
                                 os.makedirs(loras_dir, exist_ok=True)
@@ -902,6 +913,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                         target_replace_module=TEXT_ENCODER_DEFAULT_TARGET_REPLACE,
                                     )
                                     pbar.update()
+
                                 # save extra_net
                                 if args.save_lora_for_extra_net:
                                     os.makedirs(
@@ -921,6 +933,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                                 else:
                                     compile_checkpoint(args.model_name, reload_models=False, lora_file_name=out_file,
                                                        log=False, snap_rev=snap_rev, pbar=pbar)
+
                                 printm("Restored, moved to acc.device.")
                         except Exception as ex:
                             print(f"Exception saving checkpoint/model: {ex}")
@@ -1069,6 +1082,8 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
             last_tenc = False
 
         for epoch in range(first_epoch, max_train_epochs):
+            callback_at_epoch_begins(epoch)
+
             if training_complete:
                 print("Training complete, breaking epoch.")
                 break
@@ -1111,6 +1126,7 @@ def main(class_gen_method: str = "Native Diffusers") -> TrainResult:
                     status.job_count = max_train_steps
                     status.job_no += train_batch_size
                     continue
+
                 with accelerator.accumulate(unet), accelerator.accumulate(text_encoder):
                     # Convert images to latent space
                     with torch.no_grad():
