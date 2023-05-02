@@ -22,7 +22,7 @@ from starlette import status
 from starlette.requests import Request
 
 try:
-    from dreambooth import shared
+    from dreambooth import shared, train_dreambooth
     from dreambooth.dataclasses.db_concept import Concept
     from dreambooth.dataclasses.db_config import from_file, DreamboothConfig
     from dreambooth.diff_to_sd import compile_checkpoint
